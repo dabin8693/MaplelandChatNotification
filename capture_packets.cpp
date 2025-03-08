@@ -153,7 +153,6 @@ int main() {
     // 패킷 캡처 시작
     std::cout << "패킷 캡처 시작..." << std::endl;
     int packet_count = 0;
-    int chat_packet_count = 0;
     int timeout_count = 0;
 
     while (true) {

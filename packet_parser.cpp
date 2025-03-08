@@ -60,7 +60,17 @@ int ParsePacket(const u_char* packet, int packet_len) {
                 return SUCCESS;
             }
             else {
+                // 레코드 체크
+                if (!IsRecord(packet + p_info.payload_offset)) { // 레코드가 아니면 패킷 폐기
+                    // std::cout << "레코드가 아닙니다.!!\n";
+                    RecordReset();
+                    return FAILURE;
+                }
                 g_record_buffer.r_len = GetRecordSize(packet, &p_info.payload_offset);
+                if (g_record_buffer.r_len == -1) {
+                    RecordReset();
+                    return FAILURE;
+                }
                 if (remaining_size < g_record_buffer.r_len) { //레코드 바디가 짤림
                     // std::cout << "바디 잘림\n";
                     memcpy(g_record_buffer.buffer, &packet[p_info.payload_offset], remaining_size);
@@ -72,6 +82,7 @@ int ParsePacket(const u_char* packet, int packet_len) {
                 else { //레코드가 다 포함됨
                     // std::cout << "안잘림\n";
                     memcpy(g_record_buffer.buffer, &packet[p_info.payload_offset], g_record_buffer.r_len);
+                    // 여기서 메모리 액세스 위반 발생 디버깅 메모리값 packet_len: 566 payload_offset: 559 remainin_size: 7
                     p_info.payload_offset += g_record_buffer.r_len; // 레코드 크기만큼 이동
                     g_record_buffer.flag = COMPLETE;
                     g_record_buffer.used_size = g_record_buffer.r_len; 
@@ -105,6 +116,10 @@ int ParsePacket(const u_char* packet, int packet_len) {
                 return FAILURE;
             }
             g_record_buffer.r_len = GetRecordSize(t_buffer, 0);
+            if (g_record_buffer.r_len == -1) {
+                RecordReset();
+                return FAILURE;
+            }
             // 뒷 부분만 채움
             if (remaining_size < g_record_buffer.r_len - g_record_buffer.used_size) { //레코드 바디가 짤림
                 // std::cout << "바디가 잘림\n";
@@ -205,15 +220,6 @@ void RecordReset() {
 void CheckKeywordTrigger(const std::string& text, int TYPE) {
     // std 콘솔 출력 빨간 글씨로 변경
     SetConsoleTextAttribute(hConsole, FOREGROUND_RED | FOREGROUND_INTENSITY);
-
-    if (text.find("어금니") != std::string::npos) { // "어금니"가 포함되어 있는지 확인
-        isTrigger = 1;
-        std::cout << "[!] 키워드 '어금니' 감지됨! 트리거 활성화\n";
-    }
-    if (TYPE == 6) {
-        isTrigger = 1; // 귓말 왔을때 소리 알림
-    }
-
 
     // 1귓말 알림 기능이 켜져 있고, TYPE이 6 (귓말 수신)일 경우
     if (whisper_alert && TYPE == 6) {
@@ -408,12 +414,18 @@ int GetSize(const u_char* packet, int start_offset) {
 int GetRecordSize(const u_char *packet, int* p_offset) { // 패킷에서 읽을때
     int size = GetSize(packet, *p_offset + 4) + 25; // 25번째 오프셋부터 길이안에 포함됨
     // std::cout << "패킷에서 읽은 레코드 사이즈: " << size << std::endl;
+    if (size > BUFFER_SIZE || size < 0) { 
+        return -1;
+    }
     return size;
 }
 
 int GetRecordSize(const u_char* r_buffer, int offset) { // 레코드 버퍼에서 읽을때
     int size = GetSize(r_buffer, offset + 4) + 25; // 25번째 오프셋부터 길이안에 포함됨
     // std::cout << "버퍼에서 읽은 레코드 사이즈: " << size << std::endl;
+    if (size > BUFFER_SIZE || size < 0) {
+        return -1;
+    }
     return size;
 }
 
